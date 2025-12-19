@@ -56,49 +56,23 @@ python run_evaluation.py \
 The `run_evaluation.py` script accepts the following arguments:
 
 ### Required Arguments
-- `--track`: Evaluation track to run
-  - Choices: `olympiad`, `research`
-  - Example: `--track research`
-
-- `--model`: Model to evaluate
-  - Examples: `gpt-5.2-2025-12-11`, `claude-sonnet-4-5-20250929`
-  - Example: `--model gpt-4o`
+```
+--track     Evaluation track (olympiad, research)
+--model     Model to evaluate (gpt-5.2-2025-12-11, claude-sonnet-4-5-20250929, etc.)
+```
 
 ### Optional Arguments
-- `--data_path`: Path to dataset CSV file
-  - Default: `data/frontierscience.csv`
-  - Example: `--data_path data/frontierscience.csv`
-
-- `--judge_model`: Model to use as judge for grading
-  - Default: `gpt-5-2025-08-07`
-  - Example: `--judge_model gpt-5.2-2025-12-11`
-
-- `--reasoning_effort`: Reasoning effort level for reasoning models (gpt-5*, o1, o3)
-  - Choices: `low`, `medium`, `high`
-  - Example: `--reasoning_effort high`
-
-- `--subject`: Filter problems by subject
-  - Choices: `physics`, `chemistry`, `biology`
-  - Example: `--subject physics`
-
-- `--limit`: Limit number of problems to evaluate (useful for testing)
-  - Example: `--limit 5`
-
-- `--num_trials`: Number of trials per problem
-  - Default: 20 for olympiad track, 30 for research track
-  - Example: `--num_trials 10`
-
-- `--output_dir`: Directory to save results
-  - Default: `results/`
-  - Example: `--output_dir results/my-experiment`
-
-- `--success_threshold`: Rubric score threshold for research track success
-  - Default: `7.0` (out of 10 points)
-  - Example: `--success_threshold 8.0`
-
-- `--verbose`: Print judge model outputs for debugging
-  - Flag (no value needed)
-  - Example: `--verbose`
+```
+--data_path           Path to dataset CSV (default: data/frontierscience.csv)
+--judge_model         Judge model for grading (default: gpt-5-2025-08-07)
+--reasoning_effort    Reasoning effort for gpt-5*/o1/o3 models (low, medium, high)
+--subject             Filter by subject (physics, chemistry, biology)
+--limit               Limit number of problems (useful for testing)
+--num_trials          Trials per problem (default: 20 olympiad, 30 research)
+--output_dir          Results directory (default: results/)
+--success_threshold   Research track threshold in points (default: 7.0/10)
+--verbose             Print judge outputs for debugging
+```
 
 ## Analyzing Results
 
