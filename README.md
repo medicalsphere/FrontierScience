@@ -2,7 +2,7 @@
 
 FrontierScience is a benchmark for evaluating AI on expert-level scientific reasoning, introduced by **OpenAI** in their blog post [*Evaluating AI's ability to perform scientific research tasks*](https://openai.com/index/frontierscience/).
 
-This repository provides an implementation for running the FrontierScience benchmark using the dataset released by OpenAI on their [Hugging Face](https://huggingface.co/datasets/openai/frontierscience). The dataset consists of 160 expert-level scientific problems organized into two tracks (Olympiad and Research) and spanning three subjects (Physics, Chemistry, and Biology):
+This repository provides an implementation for running the FrontierScience benchmark using the dataset released by OpenAI on [Hugging Face](https://huggingface.co/datasets/openai/frontierscience). The dataset consists of 160 expert-level scientific problems organized into two tracks (Olympiad and Research) and spanning three subjects (Physics, Chemistry, and Biology):
 
 - **Olympiad Track**: 100 international olympiad-level problems (short answer format)
 - **Research Track**: 60 PhD-level research sub-problems (open-ended, rubric-graded)
@@ -49,6 +49,26 @@ python run_evaluation.py \
     --model gpt-5-mini-2025-08-07 \
     --limit 2 \
     --num_trials 2
+```
+
+## Full Evaluation
+
+Run complete evaluations on both tracks:
+
+### Research Track (60 problems, 30 trials each)
+```bash
+python run_evaluation.py \
+    --track research \
+    --model gpt-5.2-2025-12-11 \
+    --num_trials 30
+```
+
+### Olympiad Track (100 problems, 20 trials each)
+```bash
+python run_evaluation.py \
+    --track olympiad \
+    --model gpt-5.2-2025-12-11 \
+    --num_trials 20
 ```
 
 ## Command-Line Arguments
@@ -108,3 +128,9 @@ frontierscience-benchmark/
 ├── analyze_results.py                # Result analysis
 └── test_installation.py              # Verify setup
 ```
+
+## References
+
+- **FrontierScience Blog Post**: [Evaluating AI's ability to perform scientific research tasks](https://openai.com/index/frontierscience/)
+- **Dataset**: [FrontierScience on Hugging Face](https://huggingface.co/datasets/openai/frontierscience)
+- **LiteLLM**: [BerriAI/litellm on GitHub](https://github.com/BerriAI/litellm) - Unified LLM API interface used for model calling
