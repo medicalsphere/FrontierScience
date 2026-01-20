@@ -15,6 +15,10 @@ This repository provides an implementation for running the FrontierScience bench
 ## Installation
 
 ```bash
+# Create and activate conda environment
+conda create -n frontierscience python=3.11 -y
+conda activate frontierscience
+
 # Navigate to project directory
 cd frontierscience
 
