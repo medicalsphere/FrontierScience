@@ -3,6 +3,7 @@ Evaluator for FrontierScience benchmark.
 """
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional
 from tqdm import tqdm
@@ -21,7 +22,8 @@ class FrontierScienceEvaluator:
         judge_model: Optional[str] = None,
         reasoning_effort: Optional[str] = None,
         output_dir: str = "results",
-        verbose: bool = False
+        verbose: bool = False,
+        max_workers: int = 1
     ):
         """
         Initialize the evaluator.
@@ -33,6 +35,7 @@ class FrontierScienceEvaluator:
             reasoning_effort: For reasoning models: 'low', 'medium', 'high'
             output_dir: Directory to save results
             verbose: If True, print judge model outputs for debugging
+            max_workers: Maximum number of parallel workers for trials (default: 1 = sequential)
         """
         self.dataset = dataset
         self.model = model
@@ -41,6 +44,7 @@ class FrontierScienceEvaluator:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.verbose = verbose
+        self.max_workers = max_workers
 
         # Initialize model callers
         self.model_caller = ModelCaller(
@@ -72,19 +76,21 @@ class FrontierScienceEvaluator:
     ) -> Dict:
         """
         Evaluate on Olympiad track.
-        
+
         Args:
             subject: Filter by subject (optional)
             limit: Limit number of problems (optional)
             num_trials: Number of independent trials per problem (paper uses 20)
-        
+
         Returns:
             Dictionary with evaluation results
         """
+        start_time = time.time()
+
         problems = self.dataset.get_olympiad_problems(subject=subject)
         if limit:
             problems = problems[:limit]
-        
+
         print(f"Evaluating {len(problems)} Olympiad problems with {num_trials} trials each...")
 
         results = []
@@ -99,7 +105,14 @@ class FrontierScienceEvaluator:
         
         # Compute aggregate statistics
         accuracy = sum(r['correct'] for r in results) / len(results) if results else 0
-        
+
+        # Calculate runtime
+        end_time = time.time()
+        runtime_seconds = end_time - start_time
+        total_trials = len(results) * num_trials
+        avg_seconds_per_problem = runtime_seconds / len(results) if results else 0
+        avg_seconds_per_trial = runtime_seconds / total_trials if total_trials > 0 else 0
+
         eval_results = {
             'track': 'olympiad',
             'model': self.model,
@@ -111,7 +124,10 @@ class FrontierScienceEvaluator:
             'total': len(results),
             'subject_filter': subject,
             'results': results,
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'runtime_seconds': round(runtime_seconds, 2),
+            'avg_seconds_per_problem': round(avg_seconds_per_problem, 2),
+            'avg_seconds_per_trial': round(avg_seconds_per_trial, 2)
         }
         
         # Save results
@@ -119,6 +135,41 @@ class FrontierScienceEvaluator:
         
         return eval_results
     
+    def _run_single_olympiad_trial(
+        self,
+        trial: int,
+        problem: str,
+        reference_answer: str
+    ) -> Dict:
+        """Run a single Olympiad trial. Helper for parallel execution."""
+        try:
+            # Get model's answer
+            response = self.model_caller.call(prompt=problem)
+            attempted_answer = response['content']
+
+            # Judge the answer
+            judge_result = self._judge_olympiad_answer(
+                problem=problem,
+                reference_answer=reference_answer,
+                attempted_answer=attempted_answer
+            )
+
+            return {
+                'trial': trial,
+                'attempted_answer': attempted_answer,
+                'correct': judge_result['correct'],
+                'judge_reasoning': judge_result['reasoning'],
+                'usage': response['usage']
+            }
+
+        except Exception as e:
+            print(f"Error in trial {trial}: {str(e)}")
+            return {
+                'trial': trial,
+                'error': str(e),
+                'correct': False
+            }
+
     def _evaluate_problem_olympiad(
         self,
         problem_data: Dict,
@@ -130,40 +181,43 @@ class FrontierScienceEvaluator:
 
         trial_results = []
 
-        trials_bar = tqdm(range(num_trials), desc="  Trials", position=1, leave=False, disable=self.verbose)
-        for trial in trials_bar:
-            try:
-                # Get model's answer
-                response = self.model_caller.call(prompt=problem)
+        if self.max_workers > 1:
+            # Parallel execution
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                futures = {
+                    executor.submit(
+                        self._run_single_olympiad_trial,
+                        trial,
+                        problem,
+                        reference_answer
+                    ): trial for trial in range(num_trials)
+                }
 
-                attempted_answer = response['content']
-                
-                # Judge the answer
-                judge_result = self._judge_olympiad_answer(
-                    problem=problem,
-                    reference_answer=reference_answer,
-                    attempted_answer=attempted_answer
+                trials_bar = tqdm(
+                    as_completed(futures),
+                    total=num_trials,
+                    desc="  Trials",
+                    position=1,
+                    leave=False,
+                    disable=self.verbose
                 )
-                
-                trial_results.append({
-                    'trial': trial,
-                    'attempted_answer': attempted_answer,
-                    'correct': judge_result['correct'],
-                    'judge_reasoning': judge_result['reasoning'],
-                    'usage': response['usage']
-                })
-            
-            except Exception as e:
-                print(f"Error in trial {trial}: {str(e)}")
-                trial_results.append({
-                    'trial': trial,
-                    'error': str(e),
-                    'correct': False
-                })
-        
+
+                for future in trials_bar:
+                    result = future.result()
+                    trial_results.append(result)
+        else:
+            # Sequential execution (original behavior)
+            trials_bar = tqdm(range(num_trials), desc="  Trials", position=1, leave=False, disable=self.verbose)
+            for trial in trials_bar:
+                result = self._run_single_olympiad_trial(trial, problem, reference_answer)
+                trial_results.append(result)
+
+        # Sort by trial number to maintain consistent ordering
+        trial_results.sort(key=lambda x: x['trial'])
+
         # Determine if problem was solved (majority vote across trials)
         correct_count = sum(t['correct'] for t in trial_results if 'correct' in t)
-        
+
         return {
             'problem': problem[:200] + '...',  # Truncate for storage
             'reference_answer': reference_answer,
@@ -216,20 +270,22 @@ class FrontierScienceEvaluator:
     ) -> Dict:
         """
         Evaluate on Research track.
-        
+
         Args:
             subject: Filter by subject (optional)
             limit: Limit number of problems (optional)
             num_trials: Number of independent trials per problem (paper uses 30)
             success_threshold: Rubric points threshold for success (paper uses 7/10)
-        
+
         Returns:
             Dictionary with evaluation results
         """
+        start_time = time.time()
+
         problems = self.dataset.get_research_problems(subject=subject)
         if limit:
             problems = problems[:limit]
-        
+
         print(f"Evaluating {len(problems)} Research problems with {num_trials} trials each...")
 
         results = []
@@ -246,7 +302,14 @@ class FrontierScienceEvaluator:
         # Compute aggregate statistics
         accuracy = sum(r['success'] for r in results) / len(results) if results else 0
         avg_rubric_score = sum(r['avg_rubric_score'] for r in results) / len(results) if results else 0
-        
+
+        # Calculate runtime
+        end_time = time.time()
+        runtime_seconds = end_time - start_time
+        total_trials = len(results) * num_trials
+        avg_seconds_per_problem = runtime_seconds / len(results) if results else 0
+        avg_seconds_per_trial = runtime_seconds / total_trials if total_trials > 0 else 0
+
         eval_results = {
             'track': 'research',
             'model': self.model,
@@ -260,7 +323,10 @@ class FrontierScienceEvaluator:
             'total': len(results),
             'subject_filter': subject,
             'results': results,
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'runtime_seconds': round(runtime_seconds, 2),
+            'avg_seconds_per_problem': round(avg_seconds_per_problem, 2),
+            'avg_seconds_per_trial': round(avg_seconds_per_trial, 2)
         }
         
         # Save results
@@ -268,6 +334,41 @@ class FrontierScienceEvaluator:
         
         return eval_results
     
+    def _run_single_research_trial(
+        self,
+        trial: int,
+        problem: str,
+        rubric: str
+    ) -> Dict:
+        """Run a single Research trial. Helper for parallel execution."""
+        try:
+            # Get model's answer
+            response = self.model_caller.call(prompt=problem)
+            attempted_answer = response['content']
+
+            # Judge the answer using rubric
+            judge_result = self._judge_research_answer(
+                problem=problem,
+                rubric=rubric,
+                attempted_answer=attempted_answer
+            )
+
+            return {
+                'trial': trial,
+                'attempted_answer': attempted_answer,
+                'rubric_score': judge_result['rubric_score'],
+                'judge_reasoning': judge_result['reasoning'],
+                'usage': response['usage']
+            }
+
+        except Exception as e:
+            print(f"Error in trial {trial}: {str(e)}")
+            return {
+                'trial': trial,
+                'error': str(e),
+                'rubric_score': 0
+            }
+
     def _evaluate_problem_research(
         self,
         problem_data: Dict,
@@ -280,40 +381,43 @@ class FrontierScienceEvaluator:
 
         trial_results = []
 
-        trials_bar = tqdm(range(num_trials), desc="  Trials", position=1, leave=False, disable=self.verbose)
-        for trial in trials_bar:
-            try:
-                # Get model's answer
-                response = self.model_caller.call(prompt=problem)
+        if self.max_workers > 1:
+            # Parallel execution
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                futures = {
+                    executor.submit(
+                        self._run_single_research_trial,
+                        trial,
+                        problem,
+                        rubric
+                    ): trial for trial in range(num_trials)
+                }
 
-                attempted_answer = response['content']
-
-                # Judge the answer using rubric
-                judge_result = self._judge_research_answer(
-                    problem=problem,
-                    rubric=rubric,
-                    attempted_answer=attempted_answer
+                trials_bar = tqdm(
+                    as_completed(futures),
+                    total=num_trials,
+                    desc="  Trials",
+                    position=1,
+                    leave=False,
+                    disable=self.verbose
                 )
-                
-                trial_results.append({
-                    'trial': trial,
-                    'attempted_answer': attempted_answer,
-                    'rubric_score': judge_result['rubric_score'],
-                    'judge_reasoning': judge_result['reasoning'],
-                    'usage': response['usage']
-                })
-            
-            except Exception as e:
-                print(f"Error in trial {trial}: {str(e)}")
-                trial_results.append({
-                    'trial': trial,
-                    'error': str(e),
-                    'rubric_score': 0
-                })
-        
+
+                for future in trials_bar:
+                    result = future.result()
+                    trial_results.append(result)
+        else:
+            # Sequential execution (original behavior)
+            trials_bar = tqdm(range(num_trials), desc="  Trials", position=1, leave=False, disable=self.verbose)
+            for trial in trials_bar:
+                result = self._run_single_research_trial(trial, problem, rubric)
+                trial_results.append(result)
+
+        # Sort by trial number to maintain consistent ordering
+        trial_results.sort(key=lambda x: x['trial'])
+
         # Calculate average rubric score across trials
         avg_score = sum(t.get('rubric_score', 0) for t in trial_results) / len(trial_results)
-        
+
         return {
             'problem': problem[:200] + '...',  # Truncate for storage
             'rubric': rubric[:200] + '...',

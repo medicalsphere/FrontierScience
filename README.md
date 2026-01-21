@@ -55,6 +55,17 @@ python run_evaluation.py \
     --num_trials 2
 ```
 
+With parallel execution (faster):
+
+```bash
+python run_evaluation.py \
+    --track research \
+    --model gpt-5-mini-2025-08-07 \
+    --limit 2 \
+    --num_trials 2 \
+    --max_workers 4
+```
+
 ## Full Evaluation
 
 Run complete evaluations on both tracks:
@@ -64,7 +75,8 @@ Run complete evaluations on both tracks:
 python run_evaluation.py \
     --track research \
     --model gpt-5.2-2025-12-11 \
-    --num_trials 30
+    --num_trials 30 \
+    --max_workers 10
 ```
 
 ### Olympiad Track (100 problems, 20 trials each)
@@ -72,7 +84,8 @@ python run_evaluation.py \
 python run_evaluation.py \
     --track olympiad \
     --model gpt-5.2-2025-12-11 \
-    --num_trials 20
+    --num_trials 20 \
+    --max_workers 10
 ```
 
 ## Command-Line Arguments
@@ -95,6 +108,7 @@ The `run_evaluation.py` script accepts the following arguments:
 --num_trials          Trials per problem (default: 20 olympiad, 30 research)
 --output_dir          Results directory (default: results/)
 --success_threshold   Research track threshold in points (default: 7.0/10)
+--max_workers         Parallel workers for trials (default: 1 = sequential)
 --verbose             Print judge outputs for debugging
 ```
 
@@ -114,6 +128,7 @@ Results are saved as JSON files in the output directory. Each file contains:
 - Per-problem results
 - Individual trial details
 - Token usage statistics
+- Runtime metrics (total seconds, average per problem, average per trial)
 
 ## Project Structure
 

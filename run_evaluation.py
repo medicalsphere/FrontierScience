@@ -105,6 +105,13 @@ def main():
         help='Print judge model outputs for debugging'
     )
 
+    parser.add_argument(
+        '--max_workers',
+        type=int,
+        default=1,
+        help='Max parallel workers for trials (default: 1 = sequential). Higher values speed up evaluation but may hit API rate limits.'
+    )
+
     args = parser.parse_args()
     
     # Validate data path
@@ -138,14 +145,17 @@ def main():
         print(f"  Reasoning effort: {args.reasoning_effort}")
     if args.verbose:
         print(f"  Verbose mode: ENABLED (will print judge outputs)")
-    
+    if args.max_workers > 1:
+        print(f"  Parallel workers: {args.max_workers}")
+
     evaluator = FrontierScienceEvaluator(
         dataset=dataset,
         model=args.model,
         judge_model=args.judge_model,
         reasoning_effort=args.reasoning_effort,
         output_dir=args.output_dir,
-        verbose=args.verbose
+        verbose=args.verbose,
+        max_workers=args.max_workers
     )
     
     # Run evaluation
@@ -186,8 +196,7 @@ def main():
             print(f"Success threshold: {results['success_threshold']}/10 points")
             print(f"Accuracy: {results['accuracy']:.2%} ({results['successful']}/{results['total']})")
             print(f"Average rubric score: {results['avg_rubric_score']:.2f}/10")
-        
-        print(f"\nResults saved to: {args.output_dir}/")
+
         return 0
     
     except Exception as e:
