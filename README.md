@@ -15,18 +15,16 @@ This repository provides an implementation for running the FrontierScience bench
 ## Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/medicalsphere/FrontierScience.git
+cd frontierscience
+
 # Create and activate conda environment
 conda create -n frontierscience python=3.11 -y
 conda activate frontierscience
 
-# Navigate to project directory
-cd frontierscience
-
 # Install dependencies
 pip install -r requirements.txt
-
-# Verify installation
-python test_installation.py
 ```
 
 ## Configuration
@@ -38,9 +36,14 @@ cp .env.example .env
 ```
 
 Edit `.env` and add your API keys:
-```
+```bash
 OPENAI_API_KEY=sk-your-key-here
 ANTHROPIC_API_KEY=sk-ant-your-key-here  # Optional, for using Claude models
+```
+
+Verify installation:
+```bash
+python test_installation.py
 ```
 
 ## Quick Test
